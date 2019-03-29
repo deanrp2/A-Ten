@@ -121,7 +121,7 @@ def id_groups(bin_energies, source_spec, width_threshold = [20, 120]):
 
     
 espec = pull_spectrum("co60_spectrum.Spe")
-ebins = bin_calibration("cs137_spectrum.Spe")
+#ebins = bin_calibration("cs137_spectrum.Spe")
 
 id_groups(ebins, espec)
 #plt.plot(ebins,espec)
