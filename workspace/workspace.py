@@ -2,7 +2,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy.signal
-
+import scipy.stats
+import scipy.optimize
+plt.close()
 
 def pull_spectrum(spec_file):
     """
@@ -35,7 +37,7 @@ def bin_calibration(cs137spec_file):
     
     #Smooth the spectrum and extract energy local maxima
     cs137_spec = smooth(pull_spectrum(cs137spec_file),30)
-    peaks, empty_dict = scipy.signal.find_peaks(cs137_spec)    
+    peaks, empty_dict = scipy.signal.find_peaks(cs137_spec)
     
     #calculate the prominence associated with each maxima and find the bin with the largest prominence
     prominences, left_bases, right_bases = scipy.signal.peak_prominences(cs137_spec, peaks)
@@ -45,10 +47,81 @@ def bin_calibration(cs137spec_file):
     maxEbin = peaks[maxEpeak]
     delE = cs137_peak/maxEbin
     
-    #Create bin energy of 
-    bin_energies = np.arange(0, (cs137_spec.size ) * delE, delE)
+    #Create bin energy array
+    bin_energies = np.arange(0, cs137_spec.size * delE, delE)
     
     return bin_energies
     
+def id_groups(bin_energies, source_spec, width_threshold = [20, 120]):
+    """
     
-plt.plot(bin_calibration("cs137_spectrum.Spe"),pull_spectrum("cs137_spectrum.Spe"))
+    """
+    #Define gaussian checker for later in function    
+    def is_gaussian(n, x, y):
+        def gaus(x,mu,sigma):
+            return (sigma*np.sqrt(2*np.pi))**-1*np.exp(-(x-mu)**2/(2*sigma**2))
+        
+        y = y/np.trapz(y,x)
+        mean0 = sum(x*y)/n
+        sigma0 = sum(y*(x-mean0)**2)/n
+        
+        #plt.figure()
+        popt,pcov = scipy.optimize.curve_fit(gaus,x,y,p0=[mean0,sigma0])
+        #perr = np.sqrt(np.diag(pcov))
+        #plt.plot(x,y,'b+:',label='data')
+        #plt.plot(x,gaus(x,*popt),'ro:',label='fit')
+        if np.sqrt(np.diag(pcov)).sum() > 2:
+            return False
+        else:
+            return True
+
+            
+            
+
+
+    
+    #Smooth signal to and easily identify spectrum peaks
+    smoothed_spec = smooth(source_spec,30)
+    peaks, empty_dict = scipy.signal.find_peaks(smoothed_spec)
+    
+    #Apply criteria that prominences must be greater than the average promenance
+    prominences, left_bases, right_bases = scipy.signal.peak_prominences(smoothed_spec, peaks)
+    peaks = np.compress(prominences > prominences.mean(), peaks)
+
+    #Apply criteria that widths must be greater than width_threshold
+    widths, width_heights, leftips, rightips = scipy.signal.peak_widths(x = smoothed_spec, peaks = peaks, rel_height = 0.9)
+    peaks = np.compress((widths > width_threshold[0]) * (widths < width_threshold[1]), peaks)
+    leftips = np.floor(np.compress((widths > width_threshold[0]) * (widths < width_threshold[1]), leftips)).astype(np.int32)
+    rightips = np.ceil(np.compress((widths > width_threshold[0]) * (widths < width_threshold[1]), rightips)).astype(np.int32)    
+    widths = np.compress((widths > width_threshold[0]) * (widths < width_threshold[1]), widths)
+    
+    #Apply criteria that shape must be appropriately gaussian
+    remove_i = np.array([]).astype(int)
+    for i in range(peaks.size):
+        n = rightips[i]-leftips[i]
+        x = np.linspace(leftips[i],rightips[i],n)
+        y = source_spec[leftips[i]:rightips[i]]
+        if not is_gaussian(n,x,y):
+            remove_i = np.append(remove_i, i)
+        
+    peaks = np.delete(peaks,remove_i)
+    leftips = np.delete(leftips,remove_i)
+    rightips = np.delete(rightips,remove_i)
+    
+    
+    plt.plot(source_spec)
+    
+    for i in range(leftips.size):
+        plt.axvline(leftips[i])
+        plt.axvline(rightips[i])
+
+        
+
+
+
+    
+espec = pull_spectrum("co60_spectrum.Spe")
+ebins = bin_calibration("cs137_spectrum.Spe")
+
+id_groups(ebins, espec)
+#plt.plot(ebins,espec)
