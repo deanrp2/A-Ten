@@ -1,7 +1,11 @@
 =A-ten
 
 READ MATERIAL
-# <material identifier (int)> <atomic number (int)> <density (float) [g/cm^3]>  
+# <material identifier (str)> <density (float) [g/cm^3]> <atomic number (int)>  <weight fraction>
+iron 7.86 26 1
+
+ss304 8.00 26         0.7 24 0.19 28 0.11
+
 END MATERIAL
 
 READ GEOMETRY
@@ -9,14 +13,14 @@ layer_material = #material of each layer
 layer_thicknesses = #thickness of each layer
 END GEOMETRY
 
-READ OPTIONS
-END OPTIONS
+READ PARAMETERS
+cs137spec_time = 300
+background_time = 300
+source_time =  150
+END PARAMETERS
 
 READ PATHS
 cs137spec_filepath = workspace/cs137_spectrum.Spe
-cs137spec_time = 300
 background_filepath = workspace/background.Spe
-backgroud_time = 300
 source_filepath = workspace/co60_spectrum.Spe 
-source_time =  300
 END PATHS
