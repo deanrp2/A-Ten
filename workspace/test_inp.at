@@ -1,0 +1,22 @@
+=A-ten
+
+READ MATERIAL
+# <material identifier (int)> <atomic number (int)> <density (float) [g/cm^3]>  
+END MATERIAL
+
+READ GEOMETRY
+layer_material = #material of each layer
+layer_thicknesses = #thickness of each layer
+END GEOMETRY
+
+READ OPTIONS
+END OPTIONS
+
+READ PATHS
+cs137spec_filepath = workspace/cs137_spectrum.Spe
+cs137spec_time = 300
+background_filepath = workspace/background.Spe
+backgroud_time = 300
+source_filepath = workspace/co60_spectrum.Spe 
+source_time =  300
+END PATHS
