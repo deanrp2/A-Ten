@@ -52,7 +52,7 @@ def bin_calibration(cs137spec_file):
     
     return bin_energies
     
-def id_groups(bin_energies, source_spec, width_threshold = [20, 120]):
+def id_groups(bin_energies, source_spec, plot_peaks = False, width_threshold = [20, 120]):
     """
     
     """
@@ -70,16 +70,11 @@ def id_groups(bin_energies, source_spec, width_threshold = [20, 120]):
         #perr = np.sqrt(np.diag(pcov))
         #plt.plot(x,y,'b+:',label='data')
         #plt.plot(x,gaus(x,*popt),'ro:',label='fit')
-        if np.sqrt(np.diag(pcov)).sum() > 2:
+        if np.sqrt(np.diag(pcov)).sum() > 1.6:
             return False
         else:
             return True
 
-            
-            
-
-
-    
     #Smooth signal to and easily identify spectrum peaks
     smoothed_spec = smooth(source_spec,30)
     peaks, empty_dict = scipy.signal.find_peaks(smoothed_spec)
@@ -108,20 +103,35 @@ def id_groups(bin_energies, source_spec, width_threshold = [20, 120]):
     leftips = np.delete(leftips,remove_i)
     rightips = np.delete(rightips,remove_i)
     
+    #integrate area under each peak
+    group_counts = np.array([])
     
-    plt.plot(source_spec)
-    
-    for i in range(leftips.size):
-        plt.axvline(leftips[i])
-        plt.axvline(rightips[i])
-
+    for i in range(peaks.size):
+        group_counts = np.append(group_counts, np.sum(source_spec[leftips[i]:rightips[i]+1]))
         
+    print(group_counts)
+    print(bin_energies[peaks])
+    
+    
+    if plot_peaks:
+        plt.figure()
+        plt.plot(bin_energies, source_spec)
+        
+        for i in range(leftips.size):
+            plt.axvline(bin_energies[leftips[i]], c = "crimson")
+            plt.axvline(bin_energies[rightips[i]], c = "crimson")
+            
+        plt.ylabel("Counts [#/s]")
+        plt.xlabel("Energy [keV]")
 
-
+    group_counts = group_counts
+    group_energies = bin_energies[peaks]
 
     
-espec = pull_spectrum("co60_spectrum.Spe")
-#ebins = bin_calibration("cs137_spectrum.Spe")
 
-id_groups(ebins, espec)
+    
+espec = pull_spectrum("na22_spectrum.Spe")
+ebins = bin_calibration("cs137_spectrum.Spe")
+
+id_groups(ebins, espec, plot_peaks = True)
 #plt.plot(ebins,espec)
