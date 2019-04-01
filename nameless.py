@@ -10,6 +10,20 @@ import numpy as np
 import scipy.signal
 import scipy.optimize
 import matplotlib.pyplot as plt
+from collections import OrderedDict
+
+SMALL_SIZE = 16
+MEDIUM_SIZE = 18
+BIGGER_SIZE = 24
+
+plt.rc('font', size=SMALL_SIZE)          # controls default text sizes
+plt.rc('axes', titlesize=SMALL_SIZE)     # fontsize of the axes title
+plt.rc('axes', labelsize=MEDIUM_SIZE)    # fontsize of the x and y labels
+plt.rc('xtick', labelsize=SMALL_SIZE)    # fontsize of the tick labels
+plt.rc('ytick', labelsize=SMALL_SIZE)    # fontsize of the tick labels
+plt.rc('legend', fontsize=SMALL_SIZE)    # legend fontsize
+plt.rc('figure', titlesize=BIGGER_SIZE)  # fontsize of the figure title
+
 
 def pull_spectrum(spec_file):
     """
@@ -102,37 +116,43 @@ class Aten:
                 
         return 1
     
-    def id_groups(self, plot_peaks = False, width_threshold = [20, 120], width_rel_height = 0.7):
+    def id_groups(self, plot_spec_peaks = False, plot_norm_peaks = False, width_threshold = [20, 120], width_rel_height = 0.7):
         """
         Function to identify energy group and count rate of each energy group.
         Parameters:
             self - both bin_energies and source_spec must be defined
-            plot_peaks - boolean to plot full source spectrum with e group identified
+            plot_spec_peaks - boolean to plot full source spectrum with e group identified
+            plot_norm_peaks = boolean to plot norm fits as well. Should only be true if plot_spec_peaks is true
             width_threshold - tuning parameter for acceptable peak width
         Returns:
             self.group_counts - count rate associated with each group
             self.group_energies - energy value associated with each group
         """
         #Define gaussian checker for later in function    
-        def is_gaussian(n, x, y):
-            def gaus(x,mu,sigma):
-                return (sigma*np.sqrt(2*np.pi))**-1*np.exp(-(x-mu)**2/(2*sigma**2))
-            
-            y = y/np.trapz(y,x)
-            mean0 = sum(x*y)/n
-            sigma0 = sum(y*(x-mean0)**2)/n
+        def is_gaussian(n, x, y, width_rel_height,be,plot_norm_peaks):
+            def gaus(x,a0,mu,sigma):
+                return a0*(sigma*np.sqrt(2*np.pi))**-1*np.exp(-(x-mu)**2/(2*sigma**2)) 
+
+            a0 = np.trapz(y) #4253
+            mean0 =  x[y.argmax()] #sum(x*y)/n #377.977
+            sigma0 =  sum(y*(x-mean0)**2)/n # 114.967
             
 
-            popt,pcov = scipy.optimize.curve_fit(gaus,x,y,p0=[mean0,sigma0],maxfev=100000)
+            popt,pcov = scipy.optimize.curve_fit(gaus,x,y,p0=[a0,mean0,sigma0],maxfev=100000)
             perr = np.sqrt(np.diag(pcov)).sum()
-            #plt.figure()
-            #plt.plot(x,y,'b+:',label='data')
-            #plt.plot(x,gaus(x,*popt),'ro:',label='fit')
-            if perr > 1.6:
-                return False
+            
+
+            if perr > 50:
+                return (False, 0)
             else:
-                return True
-    
+                if plot_norm_peaks:
+                    plt.plot(be,gaus(x,*popt),'o', c = "mediumseagreen", MarkerSize=5, label = "Gaussian Approximation")
+                return (True, popt[0])
+        
+        #initializing figure if necessary
+        if plot_spec_peaks or plot_norm_peaks:
+            plt.figure(figsize=[15,8])
+        
         #Smooth signal to and easily identify spectrum peaks
         smoothed_spec = smooth(self.source_spec,30)
         peaks, empty_dict = scipy.signal.find_peaks(smoothed_spec)
@@ -151,35 +171,43 @@ class Aten:
         
         
         #Apply criteria that shape must be appropriately gaussian
+        #Hiding in here is getting the count rate under each peak as a return from the is_gaussian
         remove_i = np.array([]).astype(int)
+        group_counts = np.array([])
         for i in range(peaks.size):
             n = rightips[i]-leftips[i]
             x = np.linspace(leftips[i],rightips[i],n)
             y = self.source_spec[leftips[i]:rightips[i]]
-            if not is_gaussian(n,x,y):
+            gaussianality, group_count = is_gaussian(n,x,y, width_rel_height,self.bin_energies[leftips[i]:rightips[i]],plot_norm_peaks = plot_norm_peaks)
+            if not gaussianality:
                 remove_i = np.append(remove_i, i)
+            else:
+                group_counts = np.append(group_counts, group_count)
             
         peaks = np.delete(peaks,remove_i)
         leftips = np.delete(leftips,remove_i)
         rightips = np.delete(rightips,remove_i)
         
-        #integrate area under each peak
-        group_counts = np.array([])
+        #integrate area under each peak, %%%%%replaced with gaussian approximation
+        #group_counts = np.array([])
         
-        for i in range(peaks.size):
-            group_counts = np.append(group_counts, np.sum(self.source_spec[leftips[i]:rightips[i]+1]))
+        #for i in range(peaks.size):
+            #group_counts = np.append(group_counts, np.sum(self.source_spec[leftips[i]:rightips[i]+1]))
             
         #Add optional peak plotted to make sure peaks were done correctly
-        if plot_peaks:
-            plt.figure()
-            plt.plot(self.bin_energies, self.source_spec)
+        if plot_spec_peaks:
+            plt.plot(self.bin_energies,self.source_spec, c = "royalblue",label = "Source Spectrum")
             
             for i in range(leftips.size):
-                plt.axvline(self.bin_energies[leftips[i]], c = "crimson")
-                plt.axvline(self.bin_energies[rightips[i]], c = "crimson")
+                plt.axvline(self.bin_energies[peaks[i]], c = "crimson", label = "Group Energy Value")
+
                 
             plt.ylabel("Counts [#/s]")
             plt.xlabel("Energy [keV]")
+            handles, labels = plt.gca().get_legend_handles_labels()
+            by_label = OrderedDict(zip(labels, handles))
+            plt.legend(by_label.values(), by_label.keys())
+
     
         self.group_counts = group_counts
         self.group_energies = self.bin_energies[peaks]
@@ -193,9 +221,9 @@ class Aten:
             composition = [[int(entry[2*i]), float(entry[2*i-1])] for i in range(int(len(entry)/2))]
             self.materials[material] = [density, composition]
     
-        print(self.materials)
 test = Aten("workspace/test_inp.at")    
-#test.id_groups(plot_peaks = True)
+test.id_groups(plot_spec_peaks = False, plot_norm_peaks = False)
+print(test.group_counts)
 #plt.figure()
 #plt.plot(test.bin_energies,test.source_spec)
 #print(test.group_energies)
