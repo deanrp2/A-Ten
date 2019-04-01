@@ -1,4 +1,11 @@
 #Main file for namsless should splinter later in development
+
+#UNITS
+#time:s
+#weight:g
+#length:cm
+#density: g/cm^3
+
 import numpy as np
 import scipy.signal
 import scipy.optimize
@@ -41,10 +48,24 @@ class Aten:
         #Read raw input text into cards
         self.material_card = input_data[input_data.index('READ MATERIAL')+1:input_data.index('END MATERIAL')]
         self.geometry_card = input_data[input_data.index('READ GEOMETRY')+1:input_data.index('END GEOMETRY')]
-        self.options_card = input_data[input_data.index('READ OPTIONS')+1:input_data.index('END OPTIONS')]
+        self.parameters_card = input_data[input_data.index('READ PARAMETERS')+1:input_data.index('END PARAMETERS')]
         self.paths_card = input_data[input_data.index('READ PATHS')+1:input_data.index('END PATHS')]
         
-        self.paths = [parameter.replace(" ", "").split("=") for parameter in self.paths_card]
+        #initializing material card
+        self.material_process()
+        
+        #parsing parameter related inputs
+        self.parameters = {x[0] : x[1] for x in [parameter.replace(" ", "").split("=") for parameter in self.parameters_card]}
+        
+        #parsing path related inputs
+        self.paths = {x[0] : x[1] for x in [parameter.replace(" ", "").split("=") for parameter in self.paths_card]}
+        self.bin_calibration(self.paths["cs137spec_filepath"])
+        
+        self.source_spec = pull_spectrum(self.paths["source_filepath"])/float(self.parameters["source_time"])
+        
+        if "background_filepath" in self.paths:
+            self.source_spec -= pull_spectrum(self.paths["background_filepath"])/float(self.parameters["background_time"])
+        
         #material information
         #layer_material
         #layer_thickness
@@ -64,7 +85,8 @@ class Aten:
         cs137_peak = 661.6 #keV
         
         #Smooth the spectrum and extract energy local maxima
-        cs137_spec = smooth(pull_spectrum(cs137spec_filepath),30)
+        cs137_spec = pull_spectrum(cs137spec_filepath)  
+        cs137_spec = smooth(cs137_spec,30)
         peaks, empty_dict = scipy.signal.find_peaks(cs137_spec)
         
         #calculate the prominence associated with each maxima and find the bin with the largest prominence
@@ -80,7 +102,7 @@ class Aten:
                 
         return 1
     
-    def id_groups(self, plot_peaks = False, width_threshold = [20, 120]):
+    def id_groups(self, plot_peaks = False, width_threshold = [20, 120], width_rel_height = 0.7):
         """
         Function to identify energy group and count rate of each energy group.
         Parameters:
@@ -100,12 +122,13 @@ class Aten:
             mean0 = sum(x*y)/n
             sigma0 = sum(y*(x-mean0)**2)/n
             
+
+            popt,pcov = scipy.optimize.curve_fit(gaus,x,y,p0=[mean0,sigma0],maxfev=100000)
+            perr = np.sqrt(np.diag(pcov)).sum()
             #plt.figure()
-            popt,pcov = scipy.optimize.curve_fit(gaus,x,y,p0=[mean0,sigma0])
-            #perr = np.sqrt(np.diag(pcov))
             #plt.plot(x,y,'b+:',label='data')
             #plt.plot(x,gaus(x,*popt),'ro:',label='fit')
-            if np.sqrt(np.diag(pcov)).sum() > 1.6:
+            if perr > 1.6:
                 return False
             else:
                 return True
@@ -114,16 +137,18 @@ class Aten:
         smoothed_spec = smooth(self.source_spec,30)
         peaks, empty_dict = scipy.signal.find_peaks(smoothed_spec)
         
+        
         #Apply criteria that prominences must be greater than the average promenance
         prominences, left_bases, right_bases = scipy.signal.peak_prominences(smoothed_spec, peaks)
         peaks = np.compress(prominences > prominences.mean(), peaks)
-    
+        
         #Apply criteria that widths must be greater than width_threshold
-        widths, width_heights, leftips, rightips = scipy.signal.peak_widths(x = smoothed_spec, peaks = peaks, rel_height = 0.9)
+        widths, width_heights, leftips, rightips = scipy.signal.peak_widths(x = smoothed_spec, peaks = peaks, rel_height = width_rel_height)
         peaks = np.compress((widths > width_threshold[0]) * (widths < width_threshold[1]), peaks)
         leftips = np.floor(np.compress((widths > width_threshold[0]) * (widths < width_threshold[1]), leftips)).astype(np.int32)
         rightips = np.ceil(np.compress((widths > width_threshold[0]) * (widths < width_threshold[1]), rightips)).astype(np.int32)    
         widths = np.compress((widths > width_threshold[0]) * (widths < width_threshold[1]), widths)
+        
         
         #Apply criteria that shape must be appropriately gaussian
         remove_i = np.array([]).astype(int)
@@ -144,9 +169,6 @@ class Aten:
         for i in range(peaks.size):
             group_counts = np.append(group_counts, np.sum(self.source_spec[leftips[i]:rightips[i]+1]))
             
-        print(group_counts)
-        print(self.bin_energies[peaks])
-        
         #Add optional peak plotted to make sure peaks were done correctly
         if plot_peaks:
             plt.figure()
@@ -162,9 +184,18 @@ class Aten:
         self.group_counts = group_counts
         self.group_energies = self.bin_energies[peaks]
     
+    def material_process(self):
+        self.materials = {}
+        for entry in self.material_card:
+            entry = entry.split()
+            material = entry.pop(0)
+            density = float(entry.pop(0))
+            composition = [[int(entry[2*i]), float(entry[2*i-1])] for i in range(int(len(entry)/2))]
+            self.materials[material] = [density, composition]
     
-    
+        print(self.materials)
 test = Aten("workspace/test_inp.at")    
-test.bin_calibration("workspace/cs137_spectrum.Spe")
-test.source_spec = pull_spectrum("workspace/na22_spectrum.Spe")
-test.id_groups()
+#test.id_groups(plot_peaks = True)
+#plt.figure()
+#plt.plot(test.bin_energies,test.source_spec)
+#print(test.group_energies)
