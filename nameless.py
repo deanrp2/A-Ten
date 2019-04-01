@@ -1,4 +1,8 @@
 #Main file for namsless should splinter later in development
+import numpy as np
+import scipy.signal
+import scipy.optimize
+import matplotlib.pyplot as plt
 
 def pull_spectrum(spec_file):
     """
@@ -28,26 +32,39 @@ def smooth(y, box_pts):
 
 
 
-class Atten:
-    def __init():
-        p = 3
-        #the input parser should go here
-        #material order: numpy vector with atomic number of each material in order
-        #material density: numpy vetor
-        #self.cs137spec_filepath
+class Aten:
+    def __init__(self,input_filepath):
+        #Reading contecnts of input file
+        with open(input_filepath) as input_file:
+            input_data = [line.strip() for line in input_file.readlines() if not (line[0] == "#" or line == "\n")]
         
-    def bin_calibration(self):
+        #Read raw input text into cards
+        self.material_card = input_data[input_data.index('READ MATERIAL')+1:input_data.index('END MATERIAL')]
+        self.geometry_card = input_data[input_data.index('READ GEOMETRY')+1:input_data.index('END GEOMETRY')]
+        self.options_card = input_data[input_data.index('READ OPTIONS')+1:input_data.index('END OPTIONS')]
+        self.paths_card = input_data[input_data.index('READ PATHS')+1:input_data.index('END PATHS')]
+        
+        self.paths = [parameter.replace(" ", "").split("=") for parameter in self.paths_card]
+        #material information
+        #layer_material
+        #layer_thickness
+        #bin energies: vector with energies of each bin using the cs137spec_filepath
+        #source energy distribution called using simple pull_spectrum from source_filepath
+        
+        
+    def bin_calibration(self,cs137spec_filepath):
         """
         Function to set energy values to each bin. Must be based on cs137 spectrum.
         Parameters:
-            cs137spec_file - file name  of a *.Spe file containing unattenuated spectrum from a Cs-137 source 
+            self - does not pull any attributes from self
+            cs137spec_filepath - file name  of a *.Spe file containing unattenuated spectrum from a Cs-137 source 
         Returns:
-            bin_energies - numpy array containing the estimated energies associated with each bin
+            self.bin_energies - numpy array containing the estimated energies associated with each bin
         """
         cs137_peak = 661.6 #keV
         
         #Smooth the spectrum and extract energy local maxima
-        cs137_spec = smooth(pull_spectrum(self.cs137spec_filepath),30)
+        cs137_spec = smooth(pull_spectrum(cs137spec_filepath),30)
         peaks, empty_dict = scipy.signal.find_peaks(cs137_spec)
         
         #calculate the prominence associated with each maxima and find the bin with the largest prominence
@@ -59,13 +76,95 @@ class Atten:
         delE = cs137_peak/maxEbin
         
         #Create bin energy array
-        bin_energies = np.arange(0, cs137_spec.size * delE, delE)
+        self.bin_energies = np.arange(0, cs137_spec.size * delE, delE)
+                
+        return 1
+    
+    def id_groups(self, plot_peaks = False, width_threshold = [20, 120]):
+        """
+        Function to identify energy group and count rate of each energy group.
+        Parameters:
+            self - both bin_energies and source_spec must be defined
+            plot_peaks - boolean to plot full source spectrum with e group identified
+            width_threshold - tuning parameter for acceptable peak width
+        Returns:
+            self.group_counts - count rate associated with each group
+            self.group_energies - energy value associated with each group
+        """
+        #Define gaussian checker for later in function    
+        def is_gaussian(n, x, y):
+            def gaus(x,mu,sigma):
+                return (sigma*np.sqrt(2*np.pi))**-1*np.exp(-(x-mu)**2/(2*sigma**2))
+            
+            y = y/np.trapz(y,x)
+            mean0 = sum(x*y)/n
+            sigma0 = sum(y*(x-mean0)**2)/n
+            
+            #plt.figure()
+            popt,pcov = scipy.optimize.curve_fit(gaus,x,y,p0=[mean0,sigma0])
+            #perr = np.sqrt(np.diag(pcov))
+            #plt.plot(x,y,'b+:',label='data')
+            #plt.plot(x,gaus(x,*popt),'ro:',label='fit')
+            if np.sqrt(np.diag(pcov)).sum() > 1.6:
+                return False
+            else:
+                return True
+    
+        #Smooth signal to and easily identify spectrum peaks
+        smoothed_spec = smooth(self.source_spec,30)
+        peaks, empty_dict = scipy.signal.find_peaks(smoothed_spec)
         
-        self.energy_spec
+        #Apply criteria that prominences must be greater than the average promenance
+        prominences, left_bases, right_bases = scipy.signal.peak_prominences(smoothed_spec, peaks)
+        peaks = np.compress(prominences > prominences.mean(), peaks)
+    
+        #Apply criteria that widths must be greater than width_threshold
+        widths, width_heights, leftips, rightips = scipy.signal.peak_widths(x = smoothed_spec, peaks = peaks, rel_height = 0.9)
+        peaks = np.compress((widths > width_threshold[0]) * (widths < width_threshold[1]), peaks)
+        leftips = np.floor(np.compress((widths > width_threshold[0]) * (widths < width_threshold[1]), leftips)).astype(np.int32)
+        rightips = np.ceil(np.compress((widths > width_threshold[0]) * (widths < width_threshold[1]), rightips)).astype(np.int32)    
+        widths = np.compress((widths > width_threshold[0]) * (widths < width_threshold[1]), widths)
         
-        return bin_energies
+        #Apply criteria that shape must be appropriately gaussian
+        remove_i = np.array([]).astype(int)
+        for i in range(peaks.size):
+            n = rightips[i]-leftips[i]
+            x = np.linspace(leftips[i],rightips[i],n)
+            y = self.source_spec[leftips[i]:rightips[i]]
+            if not is_gaussian(n,x,y):
+                remove_i = np.append(remove_i, i)
+            
+        peaks = np.delete(peaks,remove_i)
+        leftips = np.delete(leftips,remove_i)
+        rightips = np.delete(rightips,remove_i)
+        
+        #integrate area under each peak
+        group_counts = np.array([])
+        
+        for i in range(peaks.size):
+            group_counts = np.append(group_counts, np.sum(self.source_spec[leftips[i]:rightips[i]+1]))
+            
+        print(group_counts)
+        print(self.bin_energies[peaks])
+        
+        #Add optional peak plotted to make sure peaks were done correctly
+        if plot_peaks:
+            plt.figure()
+            plt.plot(self.bin_energies, self.source_spec)
+            
+            for i in range(leftips.size):
+                plt.axvline(self.bin_energies[leftips[i]], c = "crimson")
+                plt.axvline(self.bin_energies[rightips[i]], c = "crimson")
+                
+            plt.ylabel("Counts [#/s]")
+            plt.xlabel("Energy [keV]")
+    
+        self.group_counts = group_counts
+        self.group_energies = self.bin_energies[peaks]
     
     
     
-    
-    
+test = Aten("workspace/test_inp.at")    
+test.bin_calibration("workspace/cs137_spectrum.Spe")
+test.source_spec = pull_spectrum("workspace/na22_spectrum.Spe")
+test.id_groups()
