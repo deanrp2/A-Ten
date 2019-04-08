@@ -142,7 +142,7 @@ class Aten:
             perr = np.sqrt(np.diag(pcov)).sum()
             
 
-            if perr > 50:
+            if perr > 80:
                 return (False, 0)
             else:
                 if plot_norm_peaks:
@@ -222,7 +222,7 @@ class Aten:
             self.materials[material] = [density, composition]
     
 test = Aten("workspace/test_inp.at")    
-test.id_groups(plot_spec_peaks = False, plot_norm_peaks = False)
+test.id_groups(plot_spec_peaks = True, plot_norm_peaks = False)
 print(test.group_counts)
 #plt.figure()
 #plt.plot(test.bin_energies,test.source_spec)
