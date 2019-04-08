@@ -211,8 +211,17 @@ class Aten:
     
         self.group_counts = group_counts
         self.group_energies = self.bin_energies[peaks]
+        return 1
     
     def material_process(self):
+        """
+        Function to decompose entries in MATERIAL CARD from text into data structs
+        Parameters:
+            self - must have material_card specified
+        Returns:
+            self.materials - dictionary-containing two items, a density and a 
+            material composition list
+        """
         self.materials = {}
         for entry in self.material_card:
             entry = entry.split()
@@ -220,10 +229,34 @@ class Aten:
             density = float(entry.pop(0))
             composition = [[int(entry[2*i]), float(entry[2*i-1])] for i in range(int(len(entry)/2))]
             self.materials[material] = [density, composition]
+        
+        return 1
+    
+    def xs_process(self):
+        """
+        l
+        """
+        def pull_xs(filename):
+            with open(filename, "r") as f:
+                lib = np.array([s[1:].split() for s in f.readlines()])[:,:2].astype(np.float32)
+            return lib
+        
+        self.xs = {}
+        for key, value in self.materials.items():
+            density = value[0]
+            
+            for i in range(len(value[1])):
+                library  = "alib/alib_" + str(value[1][0])
+            print(library[5:])
+           
+            
+            
+        
+    
     
 test = Aten("workspace/test_inp.at")    
-test.id_groups(plot_spec_peaks = True, plot_norm_peaks = False)
-print(test.group_counts)
+test.id_groups()
+test.xs_process()
 #plt.figure()
 #plt.plot(test.bin_energies,test.source_spec)
 #print(test.group_energies)
