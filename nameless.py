@@ -11,6 +11,8 @@ import scipy.signal
 import scipy.optimize
 import matplotlib.pyplot as plt
 from collections import OrderedDict
+import fnmatch
+import os
 
 SMALL_SIZE = 16
 MEDIUM_SIZE = 18
@@ -238,16 +240,22 @@ class Aten:
         """
         def pull_xs(filename):
             with open(filename, "r") as f:
-                lib = np.array([s[1:].split() for s in f.readlines()])[:,:2].astype(np.float32)
+                lib = np.array([s[3:].split() for s in f.readlines()])[:,:2].astype(np.float32)
+                #lib = [s[2:].split() for s in f.readlines()]
             return lib
         
+        print(self.materials)
         self.xs = {}
         for key, value in self.materials.items():
             density = value[0]
+
+            for znum, mass_frac in value[1]:
+                print(znum)
+                library = "alib/" + [i for i in os.listdir("alib/") if "alib_" + str(znum) in i][0]
+                
+                
             
-            for i in range(len(value[1])):
-                library  = "alib/alib_" + str(value[1][0])
-            print(library[5:])
+
            
             
             
