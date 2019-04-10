@@ -54,7 +54,7 @@ def smooth(y, box_pts):
  
  
  
-class Aten:
+class ATen:
     def __init__(self,input_filepath):
         #Reading contecnts of input file
         with open(input_filepath) as input_file:
@@ -324,7 +324,7 @@ class Aten:
          
      
      
-test = Aten("workspace/test_inp.at")    
+test = ATen("workspace/test_inp.at")    
 test.compute()
 #plt.figure()
 #plt.plot(test.bin_energies,test.source_spec)
