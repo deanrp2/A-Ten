@@ -244,28 +244,31 @@ class ATen:
         Parameters:
             self - must have self.materials defined
         Returns:
-            self.ac - dictionary with keys of each material ID and values of list of ac per energy group
+            self.ac - dictionary with keys of each material ID and values of list representing energies
+                    - energy list as follows 
+                        - each row is a separate material
+                        - each column is an energy group
+                        - sum each row for total ac for an energy group
         """
         def pull_ac(filename):
             #function to pull cross sections from libraries in workable form
             with open(filename, "r") as f:
                 lib = np.array([s[3:].split() for s in f.readlines()])[:,:2].astype(np.float32)
             return lib
-         
-        print(self.materials)
+
         self.ac = {}
         for key, value in self.materials.items():
             density = value[0]
-            group_ac = np.array([])
+            group_ac = np.empty((len(value[1])))
             for energy in self.group_energies:
-                ac = 0
+                ac = np.array([])
                 for znum, mass_frac in value[1]:
                     library = "alib/" + [i for i in os.listdir("alib/") if "alib_" + str(znum) in i][0]
                     temp_ac = pull_ac(library)
-                    ac += np.interp(energy/1000,temp_ac[:,0],temp_ac[:,1])*mass_frac
-                group_ac = np.append(group_ac, ac*density)
-            self.ac[key] = group_ac
-            
+                    ac = np.append(ac, np.interp(energy/1000,temp_ac[:,0],temp_ac[:,1])*mass_frac)
+                
+                group_ac = np.vstack((group_ac, ac*density))
+            self.ac[key] = group_ac[1:,:] #some adjustment that needs to be made because of array initialization
         return 1
                  
     
@@ -273,6 +276,15 @@ class ATen:
         """
         
         """
+        def solve_master(master_ara, div_rows):
+            for i in range(master_ara.shape[0]):
+                if np.isclose(master_ara[i,1],0):
+                    thickness = master_ara[i,2] - master_ara[i-1,2] 
+                    master_ara[i,1] = master_ara[i-1,1]*np.exp(-master_ara[i-1,3]*thickness)
+                    
+
+            
+        
         
         #setting up depth vector and n depending on "layer_mesh_divs"
         if "layer_mesh_divs" in self.parameters.keys():
@@ -296,7 +308,7 @@ class ATen:
         
         #create array with enery group repeated the same number of times as the length of depth vec
         working_grp = np.array([])
-        for i in range(self.group_energies.size):
+        for i in reversed(range(self.group_energies.size)):
             working_grp = np.append(working_grp, np.tile(self.group_energies[i],depth.size))
         
         #set up attenuation coeff vector
@@ -305,15 +317,26 @@ class ATen:
         for i in range(self.group_energies.size):
             ac_vec = np.append(0,ac_vec)
             for mat in material_list:
-                ac_vec = np.append( self.ac[mat][i], ac_vec)
+                ac_vec = np.append( self.ac[mat][i,:].sum(), ac_vec)
+        
 
         #place these vectors in master_ara
         master_ara[:,0] = working_grp
         master_ara[:,2] = np.tile(depth, self.group_energies.size)
         master_ara[:,3] = ac_vec
         
-
-
+        #finding rows that start each energy group
+        div_rows = np.array([0])
+        for i in range(master_ara.shape[0]-1):
+            if master_ara[i,3]==0:
+                div_rows = np.append(div_rows, i+1)
+                
+        #initializing count rate for each energy group
+        master_ara[div_rows,1] = self.group_counts
+        
+        #Fill in counts to each division in master_ara
+        solve_master(master_ara, div_rows)
+        
         print(master_ara)
              
              
@@ -324,7 +347,7 @@ class ATen:
          
      
      
-test = ATen("workspace/test_inp.at")    
+test = ATen("workspace/toy_inp.at")    
 test.compute()
 #plt.figure()
 #plt.plot(test.bin_energies,test.source_spec)
