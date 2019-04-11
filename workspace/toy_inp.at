@@ -16,7 +16,7 @@ END GEOMETRY
 READ PARAMETERS
 cs137spec_time = 300
 background_time = 300
-source_time =  150
+source_time = 300 
 layer_mesh_divs = 10
 END PARAMETERS
 
