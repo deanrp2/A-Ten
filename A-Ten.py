@@ -56,9 +56,14 @@ def smooth(y, box_pts):
  
 class ATen:
     def __init__(self,input_filepath):
+        self.input_filepath = input_filepath
+        self.casename = self.input_filepath.split("/")[-1][:-3]
+        self.working_directory = "./" + "/".join(self.input_filepath.split("/")[:-1]) + "/"
+        
         #Reading contecnts of input file
         with open(input_filepath) as input_file:
-            input_data = [line.strip() for line in input_file.readlines() if not (line[0] == "#" or line == "\n")]
+            self.raw_input = input_file.readlines()
+            input_data = [line.strip() for line in self.raw_input if not (line[0] == "#" or line == "\n")]
          
         #Read raw input text into cards
         self.material_card = input_data[input_data.index('READ MATERIAL')+1:input_data.index('END MATERIAL')]
@@ -337,8 +342,15 @@ class ATen:
         #Fill in counts to each division in master_ara
         solve_master(master_ara, div_rows)
         
-        print(master_ara)
+        self.master_ara = [master_ara,div_rows]
+        
+        return 1
+        
+    def print_output(self):
+        for i in vars(self):
+            print(i, vars(self)[i])
              
+
              
  
             
@@ -349,6 +361,7 @@ class ATen:
      
 test = ATen("workspace/toy_inp.at")    
 test.compute()
+test.print_output()
 #plt.figure()
 #plt.plot(test.bin_energies,test.source_spec)
 #print(test.group_energies)
