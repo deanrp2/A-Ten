@@ -347,6 +347,7 @@ class ATen:
         return 1
         
     def print_output(self):
+        np.savetxt("outfile.txt", self.master_ara[0], header = "Energy grp, count, depth, attenuation coeff", delimiter = ",")
         for i in vars(self):
             print(i, vars(self)[i])
              
