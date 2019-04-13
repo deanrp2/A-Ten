@@ -56,6 +56,8 @@ def smooth(y, box_pts):
  
 class ATen:
     def __init__(self,input_filepath):
+        self.banner = "THE BANNER WILL BE HERE"
+        
         self.input_filepath = input_filepath
         self.casename = self.input_filepath.split("/")[-1][:-3]
         self.working_directory = "./" + "/".join(self.input_filepath.split("/")[:-1]) + "/"
@@ -92,7 +94,7 @@ class ATen:
             self.source_spec -= pull_spectrum(self.paths["background_filepath"])/float(self.parameters["background_time"])
         
         #identigy groups and strengths and assign "cross sections"
-        self.id_groups()
+        self.id_groups(plot_spec_peaks = False, plot_norm_peaks = False)
         self.ac_process()
  
         #layer_thickness
@@ -120,6 +122,8 @@ class ATen:
          
         #Find bin of maximum energy
         maxEbin = peaks[maxEpeak]
+        self.maxEbin = maxEbin
+        self.cs137_spec = cs137_spec
         delE = cs137_peak/maxEbin
          
         #Create bin energy array
@@ -347,14 +351,84 @@ class ATen:
         return 1
         
     def print_output(self):
+        def heading(string):
+            return("\n" + 80*"-" + "\n" + string + "\n" + 80*"-" + "\n")
+            
+        #Should be removed when actual code gets used   
         np.savetxt("outfile.txt", self.master_ara[0], header = "Energy grp, count, depth, attenuation coeff", delimiter = ",")
         for i in vars(self):
             print(i, vars(self)[i])
+        print("\n\n\n\n\n\n")
+        
+        #set up output and banner
+        output = open(self.working_directory + self.casename + ".out", "w")
+        output.write(self.banner + "\n\n")
+        
+        #printing raw input
+        output.write(heading("Raw Input"))
+        output.write("".join(self.raw_input))
+        
+        #printing cards
+        output.write(heading("Material Card"))
+        output.write("\n".join(self.material_card) + "\n")
+        output.write(heading("Geometry Card"))
+        output.write("\n".join(self.geometry_card) + "\n")
+        output.write(heading("Parameters Card"))
+        output.write("\n".join(self.parameters_card) + "\n")        
+        output.write(heading("Paths Card"))
+        output.write("\n".join(self.paths_card) + "\n")        
+
+        #printing materials
+        output.write(heading("Materials"))
+        for key, item in self.materials.items():
+            #print(key,item[)
+            output.write("Material: %s       Density: %.4f [g/cm^3]\n" % (key.ljust(15), item[0]))
+            output.write("Atomic Number        Mass Fraction\n")
+            for z,p in item[1]:
+                output.write("%i                   %.5f\n"%(z,p))
+            output.write("\n")
+        
+        #printing geomety
+        output.write(heading("Geometry"))
+        output.write("Material             Layer Thickness [cm]    Cumulative Thickness [cm]\n")
+        accum = 0
+        for i in range(len(self.layer_materials)):
+            accum += self.layer_thicknesses[i]
+            output.write("{:<17}".format(self.layer_materials[i]) + "    %.5f"%self.layer_thicknesses[i] + " "*17 + "%.5f"%(accum) + "\n")
+            
+        #printing group energy and strength
+        output.write(heading("Energy Group Identification"))
+        output.write("Group Energy [keV]                Group Count Rate [#/s]\n")
+        for i in range(len(self.group_counts)):
+            grp = "%.5f"%(self.group_energies[i])
+            output.write(grp + (34 - len(grp))*" " + "%.5f\n"%(self.group_counts[i]))
+        
+        #printing calibration spectra with peak identified
+        output.write(heading("Cs-137 Calibration Spectrum"))
+        output.write("Bin Number           Count Number\n")
+        for i in range(self.cs137_spec.size):
+            output.write("{:<21}".format(str(i)) + str(self.cs137_spec[i]))
+            
+            if i == self.maxEbin:
+                output.write("    *661.5 keV peak, used for calibration")
+            
+            output.write("\n")
+            
+        #printing source spectra
+        output.write(heading("Unattenuated Spectra"))
+        output.write("Bin Energy [keV]              Count Rate [#/s]\n")
+        for i in range(self.source_spec.size):
+            e = "%.5f"%self.bin_energies[i]
+            s = "%.5f\n"%np.abs(self.source_spec[i])
+            output.write(e +(30-len(e))*" " + s)
+        
+        
+        output.close()
              
 
              
  
-            
+                                                                               
              
              
          
