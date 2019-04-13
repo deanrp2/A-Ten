@@ -131,7 +131,7 @@ class ATen:
                  
         return 1
      
-    def id_groups(self, plot_spec_peaks = False, plot_norm_peaks = False, width_threshold = [20, 120], width_rel_height = 0.7):
+    def id_groups(self, plot_spec_peaks = False, plot_norm_peaks = False, width_threshold = [40, 120], width_rel_height = 0.7):
         """
         Function to identify energy group and count rate of each energy group.
         Parameters:
@@ -157,7 +157,7 @@ class ATen:
             perr = np.sqrt(np.diag(pcov)).sum()
              
  
-            if perr > 80:
+            if perr > 50:
                 return (False, 0)
             else:
                 if plot_norm_peaks:
@@ -202,13 +202,7 @@ class ATen:
         peaks = np.delete(peaks,remove_i)
         leftips = np.delete(leftips,remove_i)
         rightips = np.delete(rightips,remove_i)
-         
-        #integrate area under each peak, %%%%%replaced with gaussian approximation
-        #group_counts = np.array([])
-         
-        #for i in range(peaks.size):
-            #group_counts = np.append(group_counts, np.sum(self.source_spec[leftips[i]:rightips[i]+1]))
-             
+                      
         #Add optional peak plotted to make sure peaks were done correctly
         if plot_spec_peaks:
             plt.plot(self.bin_energies,self.source_spec, c = "royalblue",label = "Source Spectrum")
@@ -255,7 +249,7 @@ class ATen:
         Returns:
             self.ac - dictionary with keys of each material ID and values of list representing energies
                     - energy list as follows 
-                        - each row is a separate material
+                        - each row is a separate nuclide
                         - each column is an energy group
                         - sum each row for total ac for an energy group
         """
@@ -290,10 +284,7 @@ class ATen:
                 if np.isclose(master_ara[i,1],0):
                     thickness = master_ara[i,2] - master_ara[i-1,2] 
                     master_ara[i,1] = master_ara[i-1,1]*np.exp(-master_ara[i-1,3]*thickness)
-                    
 
-            
-        
         
         #setting up depth vector and n depending on "layer_mesh_divs"
         if "layer_mesh_divs" in self.parameters.keys():
@@ -312,6 +303,7 @@ class ATen:
             depth = np.append(0,np.cumsum(self.layer_thicknesses))
             material_list = self.layer_materials
             
+            
         #set up master array with columns energy, strength, depth, and atten coeff
         master_ara = np.zeros((depth.size*self.group_energies.size, 4))
         
@@ -323,10 +315,13 @@ class ATen:
         #set up attenuation coeff vector
         ac_vec = np.array([])
         
+        self.material_divisions = []
+        
         for i in range(self.group_energies.size):
             ac_vec = np.append(0,ac_vec)
             for mat in material_list:
                 ac_vec = np.append( self.ac[mat][i,:].sum(), ac_vec)
+                self.material_divisions.append(mat)
         
 
         #place these vectors in master_ara
@@ -354,11 +349,9 @@ class ATen:
         def heading(string):
             return("\n" + 80*"-" + "\n" + string + "\n" + 80*"-" + "\n")
             
-        #Should be removed when actual code gets used   
-        np.savetxt("outfile.txt", self.master_ara[0], header = "Energy grp, count, depth, attenuation coeff", delimiter = ",")
-        for i in vars(self):
-            print(i, vars(self)[i])
-        print("\n\n\n\n\n\n")
+        #for i in vars(self):
+        #    print(i, vars(self)[i])
+        #print("\n\n\n\n\n\n")
         
         #set up output and banner
         output = open(self.working_directory + self.casename + ".out", "w")
@@ -402,6 +395,48 @@ class ATen:
         for i in range(len(self.group_counts)):
             grp = "%.5f"%(self.group_energies[i])
             output.write(grp + (34 - len(grp))*" " + "%.5f\n"%(self.group_counts[i]))
+            
+        #printing master array
+        output.write(heading("Master Array"))
+        output.write("Grp Energy [keV]   Count Rate [#/s]   Depth [cm]   Atten Coeff [cm^2]   Material\n")
+      
+        i = 0
+        for j, row in enumerate(self.master_ara[0]):
+            e = "%.3f"%row[0]
+            s = "%.3f"%row[1]
+            d = "%.3f"%row[2]
+            c = "%.5f"%row[3]
+            
+            if np.isclose(row[3],0):
+                m = ""
+            else:
+                m = self.material_divisions[i]
+                i += 1
+            
+            output.write(e + " "*(19-len(e)) + s + " "*(19-len(s)) + d + " "*(13-len(d))+ c + (21-len(c))*" " + m + "\n")
+            
+            if m == "":
+                output.write(26*" - " + "\n")
+            
+        #attenuation coefficient libraries
+        output.write(heading("Attenuation Coefficient Values"))
+        for key, item in self.ac.items():
+            output.write("Material = {mat}\n".format(mat = key))
+            output.write("Atomic Number   Mass Fraction    ")
+            for i, e in enumerate(self.group_energies):
+                a = "E%i:%.2f"%(i,e)
+                output.write(a + " "*(15-len(a)))
+            output.write("\n")    
+            for i in range(item.T.shape[0]):
+                anum = str(self.materials[key][1][i][0])
+                frac = "%.4f"%self.materials[key][1][i][1]
+                output.write(anum + " "*(16-len(anum)) + frac + " "*11 ) 
+                for j in range(item.T.shape[1]):
+                    const = "%.4f"%item.T[i,j]
+                    output.write(const + " "*(15-len(const)))
+                output.write("\n")
+            output.write("\n")
+            
         
         #printing calibration spectra with peak identified
         output.write(heading("Cs-137 Calibration Spectrum"))
@@ -428,12 +463,7 @@ class ATen:
 
              
  
-                                                                               
-             
-             
-         
-     
-     
+                                                                                        
 test = ATen("workspace/toy_inp.at")    
 test.compute()
 test.print_output()
