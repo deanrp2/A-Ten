@@ -23,5 +23,5 @@ END PARAMETERS
 READ PATHS
 cs137spec_filepath = workspace/cs137_spectrum.Spe
 background_filepath = workspace/background.Spe
-source_filepath = workspace/na22_spectrum.Spe 
+source_filepath = workspace/co60_spectrum.Spe 
 END PATHS
