@@ -12,6 +12,7 @@ import scipy.optimize
 import matplotlib.pyplot as plt
 from collections import OrderedDict
 import os
+import datetime
 import sys
 
  
@@ -161,7 +162,7 @@ class ATen:
             self.source_spec -= pull_spectrum(self.paths["background_filepath"])/float(self.parameters["background_time"])
         
         #identigy groups and strengths and assign "cross sections"
-        self.id_groups(plot_spec_peaks = False, plot_norm_peaks = False)
+        self.id_groups(plot_spec_peaks = True, plot_norm_peaks = True)
         self.ac_process()
  
         #layer_thickness
@@ -176,19 +177,57 @@ class ATen:
         Returns:
             self.bin_energies - numpy array containing the estimated energies associated with each bin
         """
+        def how_much_gaussian(n, x, y):
+            def gaus(x,a0,mu,sigma):
+                return a0*(sigma*np.sqrt(2*np.pi))**-1*np.exp(-(x-mu)**2/(2*sigma**2)) 
+     
+            a0 = np.trapz(y) 
+            mean0 =  x[y.argmax()] 
+            sigma0 =  sum(y*(x-mean0)**2)/n 
+             
+             
+            popt,pcov = scipy.optimize.curve_fit(gaus,x,y,p0=[a0,mean0,sigma0],maxfev=100000)
+            perr = np.sqrt(np.diag(pcov)).sum()
+                        
+            if perr > 500:
+                return False
+            else:
+                return True
+
+
+        
         cs137_peak = 661.6 #keV
          
         #Smooth the spectrum and extract energy local maxima
-        cs137_spec = pull_spectrum(cs137spec_filepath)  
+        cs137_spec = pull_spectrum(cs137spec_filepath) 
+
+        
         cs137_spec = smooth(cs137_spec,30)
+        plt.figure()
+        plt.plot(cs137_spec)
+        plt.show()
         peaks, empty_dict = scipy.signal.find_peaks(cs137_spec)
          
         #calculate the prominence associated with each maxima and find the bin with the largest prominence
         prominences, left_bases, right_bases = scipy.signal.peak_prominences(cs137_spec, peaks)
-        maxEpeak = prominences.argmax()
+        peaks = np.compress(prominences > prominences.mean(), peaks)
+        left_bases = np.compress(prominences > prominences.mean(), left_bases)
+        right_bases = np.compress(prominences > prominences.mean(), right_bases)
+        
+        gauss_errors = np.array([])
+        for i in range(peaks.size):
+            n = right_bases[i]-left_bases[i]
+            x = np.linspace(left_bases[i],right_bases[i],n)
+            y = cs137_spec[left_bases[i]:right_bases[i]]
+            gauss_errors = np.append(gauss_errors, how_much_gaussian(n,x,y))
+                        
+        peaks = np.compress(gauss_errors, peaks)
+        prominences, left_bases, right_bases = scipy.signal.peak_prominences(cs137_spec, peaks)
+        
          
+        
         #Find bin of maximum energy
-        maxEbin = peaks[maxEpeak]
+        maxEbin = peaks[prominences.argmax()]
         self.maxEbin = maxEbin
         self.cs137_spec = cs137_spec
         delE = cs137_peak/maxEbin
@@ -419,7 +458,7 @@ class ATen:
         
         #set up output and banner
         output = open(self.working_directory + self.casename + ".out", "w")
-        output.write(self.banner + "\n\n")
+        output.write(self.banner + "\n" + str(datetime.datetime.now()) + "\n\n")
         
         #printing raw input
         output.write(heading("Raw Input"))
@@ -531,3 +570,4 @@ test = ATen(ms_input)
 test.compute()
 test.print_output()
 
+plt.show()
