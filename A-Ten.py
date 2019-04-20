@@ -203,9 +203,6 @@ class ATen:
 
         
         cs137_spec = smooth(cs137_spec,30)
-        plt.figure()
-        plt.plot(cs137_spec)
-        plt.show()
         peaks, empty_dict = scipy.signal.find_peaks(cs137_spec)
          
         #calculate the prominence associated with each maxima and find the bin with the largest prominence
@@ -237,7 +234,7 @@ class ATen:
                  
         return 1
      
-    def id_groups(self, plot_spec_peaks = False, plot_norm_peaks = False, width_threshold = [40, 120], width_rel_height = 0.7):
+    def id_groups(self, plot_spec_peaks = False, plot_norm_peaks = False, width_threshold = [30, 170], width_rel_height = 0.7):
         """
         Function to identify energy group and count rate of each energy group.
         Parameters:
@@ -262,8 +259,7 @@ class ATen:
             popt,pcov = scipy.optimize.curve_fit(gaus,x,y,p0=[a0,mean0,sigma0],maxfev=100000)
             perr = np.sqrt(np.diag(pcov)).sum()
              
- 
-            if perr > 50:
+            if perr > 30 or perr is np.nan:
                 return (False, 0)
             else:
                 if plot_norm_peaks:
@@ -275,7 +271,7 @@ class ATen:
             plt.figure(figsize=[15,8])
          
         #Smooth signal to and easily identify spectrum peaks
-        smoothed_spec = smooth(self.source_spec,30)
+        smoothed_spec = self.source_spec 
         peaks, empty_dict = scipy.signal.find_peaks(smoothed_spec)
          
          
@@ -322,6 +318,7 @@ class ATen:
             handles, labels = plt.gca().get_legend_handles_labels()
             by_label = OrderedDict(zip(labels, handles))
             plt.legend(by_label.values(), by_label.keys())
+            plt.tight_layout()
  
      
         self.group_counts = group_counts
@@ -382,9 +379,6 @@ class ATen:
                  
     
     def compute(self):
-        """
-        
-        """
         def solve_master(master_ara, div_rows):
             for i in range(master_ara.shape[0]):
                 if np.isclose(master_ara[i,1],0):
