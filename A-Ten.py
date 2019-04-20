@@ -12,6 +12,7 @@ import scipy.optimize
 import matplotlib.pyplot as plt
 from collections import OrderedDict
 import os
+import sys
 
  
 SMALL_SIZE = 16
@@ -123,6 +124,9 @@ class ATen:
         self.input_filepath = input_filepath
         self.casename = self.input_filepath.split("/")[-1][:-3]
         self.working_directory = "./" + "/".join(self.input_filepath.split("/")[:-1]) + "/"
+        self.script_dir = "/".join(os.path.realpath(__file__).split("/")[:-1]) + "/"
+        
+        os.chdir(self.working_directory)
         
         #Reading contecnts of input file
         with open(input_filepath) as input_file:
@@ -147,7 +151,8 @@ class ATen:
         self.parameters = {x[0] : x[1] for x in [parameter.replace(" ", "").split("=") for parameter in self.parameters_card]}
          
         #parsing path related inputs
-        self.paths = {x[0] : x[1] for x in [parameter.replace(" ", "").split("=") for parameter in self.paths_card]}
+        self.paths = {x[0] : self.working_directory + x[1] for x in [parameter.replace(" ", "").split("=") for parameter in self.paths_card]}
+        
         self.bin_calibration(self.paths["cs137spec_filepath"])
          
         self.source_spec = pull_spectrum(self.paths["source_filepath"])/float(self.parameters["source_time"])
@@ -328,7 +333,7 @@ class ATen:
             for energy in self.group_energies:
                 ac = np.array([])
                 for znum, mass_frac in value[1]:
-                    library = "alib/" + [i for i in os.listdir("alib/") if "alib_" + str(znum) in i][0]
+                    library = self.script_dir + "alib/" + [i for i in os.listdir(self.script_dir + "alib/") if "alib_" + str(znum) in i][0]
                     temp_ac = pull_ac(library)
                     ac = np.append(ac, np.interp(energy/1000,temp_ac[:,0],temp_ac[:,1])*mass_frac)
                 
@@ -411,9 +416,6 @@ class ATen:
         def heading(string):
             return("\n" + 80*"-" + "\n" + string + "\n" + 80*"-" + "\n")
             
-        #for i in vars(self):
-        #    print(i, vars(self)[i])
-        #print("\n\n\n\n\n\n")
         
         #set up output and banner
         output = open(self.working_directory + self.casename + ".out", "w")
@@ -523,10 +525,9 @@ class ATen:
         output.close()
              
 
-             
-for file in os.listdir("working/"):
-    if ".at" in file:                                                                      
-        test = ATen("working/" + file)    
-        test.compute()
-        test.print_output()
+ms_input = sys.argv[2]             
+                                                                    
+test = ATen(ms_input)    
+test.compute()
+test.print_output()
 
