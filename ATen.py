@@ -165,7 +165,6 @@ class ATen:
         self.id_groups(plot_spec_peaks = True, plot_norm_peaks = True)
         self.ac_process()
  
-        #layer_thickness
          
          
     def bin_calibration(self,cs137spec_filepath):
@@ -557,11 +556,11 @@ class ATen:
         
         output.close()
              
-
-ms_input = sys.argv[2]             
-                                                                    
-test = ATen(ms_input)    
-test.compute()
-test.print_output()
-
-plt.show()
+if __name__ == '__main__':
+    ms_input = sys.argv[2]             
+                                                                        
+    test = ATen(ms_input)    
+    test.compute()
+    test.print_output()
+    
+    plt.show()
