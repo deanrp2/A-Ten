@@ -183,9 +183,8 @@ class ATen:
             a0 = np.trapz(y) 
             mean0 =  x[y.argmax()] 
             sigma0 =  sum(y*(x-mean0)**2)/n 
-             
-             
-            popt,pcov = scipy.optimize.curve_fit(gaus,x,y,p0=[a0,mean0,sigma0],maxfev=100000)
+            
+            popt,pcov = scipy.optimize.curve_fit(gaus,x,y,p0=[a0,mean0,sigma0],maxfev=1000000)
             perr = np.sqrt(np.diag(pcov)).sum()
                         
             if perr > 500:
@@ -199,7 +198,7 @@ class ATen:
          
         #Smooth the spectrum and extract energy local maxima
         cs137_spec = pull_spectrum(cs137spec_filepath) 
-
+        plt.show()
         
         cs137_spec = smooth(cs137_spec,30)
         peaks, empty_dict = scipy.signal.find_peaks(cs137_spec)
